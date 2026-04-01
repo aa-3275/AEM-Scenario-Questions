@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AEM Scenario Blog</title>
+
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: #111827;
+        --border: #1f2937;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #6366f1;
+      }
+
+      body {
+        font-family: system-ui;
+        background: linear-gradient(180deg, #020617, #0f172a);
+        color: var(--text);
+        padding: 20px;
+      }
+
+      /* HEADER */
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .header h1 {
+        font-size: 28px;
+        background: linear-gradient(90deg, #6366f1, #22c55e);
+        -webkit-background-clip: text;
+        color: transparent;
+      }
+      .header p {
+        color: var(--muted);
+      }
+
+      /* FILTER */
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      .pill {
+        padding: 6px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        cursor: pointer;
+        font-size: 12px;
+        background: #020617;
+        color: var(--muted);
+      }
+      .pill.active {
+        background: var(--accent);
+        color: white;
+      }
+
+      /* GRID */
+      .section-label {
+        margin: 20px 0 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 15px;
+      }
+
+      /* CARD */
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        transition: 0.2s;
+      }
+      .card:hover {
+        transform: translateY(-5px);
+      }
+
+      .card-head {
+        padding: 16px;
+      }
+
+      .meta {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+
+      .badge {
+        font-size: 10px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #1f2937;
+      }
+
+      .qtext {
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      /* ANSWER */
+      .answer-toggle {
+        padding: 10px 16px;
+        border-top: 1px solid var(--border);
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .answer {
+        display: none;
+        padding: 15px;
+        font-size: 13px;
+      }
+
+      .answer.open {
+        display: block;
+      }
+
+      .hint {
+        font-size: 12px;
+        margin-bottom: 10px;
+        color: var(--muted);
+      }
+
+      ul {
+        padding-left: 18px;
+      }
+      li {
+        margin-bottom: 6px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="header">
+      <h1>AEM Scenario Questions</h1>
+      <p>Frontend • Backend • Real World Scenarios</p>
+    </div>
+
+    <div class="toolbar">
+      <button class="pill active" data-z="all">All</button>
+      <button class="pill" data-z="FE">Frontend</button>
+      <button class="pill" data-z="BE">Backend</button>
+      <button class="pill" data-z="FE+BE">Full Stack</button>
+
+      <button class="pill active" data-l="all">All Levels</button>
+      <button class="pill" data-l="L1">L1</button>
+      <button class="pill" data-l="L2">L2</button>
+      <button class="pill" data-l="L3">L3</button>
+
+      <span id="stats"></span>
+    </div>
+
+    <div id="container"></div>
+
+    <script>
+      // 👉 SAME DATA (trimmed here for readability - you can paste full from your file)
+      const DATA = [
+        {
+          id: 1,
+          zone: 'FE',
+          level: 'L1',
+          label: 'Component authoring issue',
+          q: "An author tells you they can't find a newly created component in the page editor's component browser. The component exists in `/apps/myproject/components/hero`. What do you check first?",
+          hint: 'Think about what controls component visibility in the editor.',
+          points: [
+            "Check the `componentGroup` property on the component node — if it's missing or set to `.hidden`, it won't appear in the browser",
+            "Verify the component is allowed in the template policy — go to the Editable Template, open the container's policy, and confirm the component (or its group) is checked",
+            "Check that the component's `cq:dialog` node exists — components without a dialog may be hidden from the drag-and-drop rail",
+            'Confirm the template is using the correct policy; sometimes authors are editing a page on a different template than expected',
+          ],
+        },
+
+        {
+          id: 2,
+          zone: 'FE',
+          level: 'L1',
+          label: 'Dialog field not saving',
+          q: 'A developer adds a new `textfield` to a component dialog. Authors fill it in, click save, but the value never appears on the page. The HTL reads `${properties.myField}`. What are the likely causes?',
+          hint: 'Trace the data path from dialog → JCR → HTL.',
+          points: [
+            'The `name` attribute on the dialog field is wrong — it must be `./myField` (relative path with `./` prefix) to save onto the current resource node',
+            "The HTL variable name doesn't match the JCR property name — double-check casing (`myField` vs `myfield`)",
+            'The Sling Model might be caching an older `ValueMap` — check if a model is involved and if it re-reads the property on each request',
+            'The dialog might be saving to a subnode (e.g., `name="./data/myField"`) — the property lives under a child node, not the root resource',
+          ],
+        },
+
+        {
+          id: 3,
+          zone: 'FE',
+          level: 'L1',
+          label: 'ClientLib not loading on publish',
+          q: 'CSS looks correct on author but is completely missing on the publish site. The ClientLib category is `myproject.styles`. What do you investigate?',
+          hint: 'Think about what differs between author and publish for ClientLibs.',
+          points: [
+            'Check `allowProxy` property on the ClientLib — without it set to `true`, the ClientLib is not accessible from `/etc.clientlibs/` on publish',
+            'Check the Dispatcher filter rules — the Dispatcher may be blocking `/etc.clientlibs/` requests',
+            "Verify the ClientLib was actually replicated — check the publish instance's CRXDE or package manager for the ClientLib node",
+            'Check if the ClientLib is included in an `embed` of another library that might not be present on publish',
+            'Confirm no HTTPS/mixed content issues if author is HTTP and publish is HTTPS',
+          ],
+        },
+
+        {
+          id: 4,
+          zone: 'FE',
+          level: 'L1',
+          label: 'HTL rendering blank output',
+          q: 'A component renders fine in CRXDE preview but shows blank content on the page. The HTL is `<h4>${model.title}</h4>`. What could cause this?',
+          hint: 'The issue is likely in the model, not the template.',
+          points: [
+            'The Sling Model may not be adapting — check server logs for `Could not adapt` errors; ensure `@Model` annotation has the correct `adaptables` type',
+            'The `getTitle()` method may return `null` — add null checks or `@Default` annotation',
+            'The `@ValueMapValue` field name must match the JCR property name exactly — a typo means a null value is silently returned',
+            "Verify the component's `sling:resourceType` actually points to the correct model package path",
+            "The HTL `data-sly-use` binding variable name must match what's used in expressions",
+          ],
+        },
+
+        {
+          id: 5,
+          zone: 'FE',
+          level: 'L2',
+          label: 'Style System not applying',
+          q: "An author selects a style ('Dark Theme') from the Style System panel but nothing changes visually on the page. The CSS class `cmp-hero--dark` is defined in the ClientLib. What do you debug?",
+          hint: 'Styles flow from template policy → page HTML → CSS.',
+          points: [
+            "Inspect the DOM — check if the CSS class is being added to the component's root element in the rendered HTML; if not, the Style System configuration in the template policy may not be saved/published",
+            'Verify the style is defined in the correct template policy — the component must be in structure mode in the Template Editor and the policy must have the style group with class `cmp-hero--dark`',
+            "Check that the CSS selector in the ClientLib matches exactly — `.cmp-hero--dark` must target the component's root element, not a nested element",
+            'Confirm the page and the template were activated after adding the style — style configs in `/conf/` must be published',
+            'Ensure the ClientLib containing the dark theme CSS is included on the page',
+          ],
+        },
+
+        {
+          id: 6,
+          zone: 'FE',
+          level: 'L2',
+          label: 'SPA Editor overlay misaligned',
+          q: 'After deploying a React SPA integrated with AEM, the edit overlays in Page Editor appear offset from the actual components. Clicking a component selects the wrong one. What causes this and how do you fix it?',
+          hint: 'The editor overlays are positioned based on DOM element coordinates.',
+          points: [
+            'CSS `transform` on parent elements shifts the visual position without changing `getBoundingClientRect()` offsets — remove transforms from container elements or recalculate overlay positioning',
+            'The component root element returned by `MapTo` must be a real DOM node with accurate dimensions — avoid rendering `null` or fragments as the component root',
+            "AEM's edit layer renders an iframe overlay; any CSS that changes `position: fixed` context or `overflow: hidden` on scroll containers breaks coordinate alignment",
+            "Ensure you're running the correct version of `@adobe/aem-react-editable-components` that matches your AEM instance version",
+            'Check for duplicate component registrations via `MapTo` — registering the same resource type twice causes confusion in the edit layer',
+          ],
+        },
+
+        {
+          id: 7,
+          zone: 'FE',
+          level: 'L2',
+          label: 'RTE content breaking layout',
+          q: 'Authors copy-paste content from Microsoft Word into an RTE field and the page layout breaks with unwanted fonts, colors, and inline styles. How do you prevent this?',
+          hint: 'Control what HTML the RTE is allowed to produce.',
+          points: [
+            'Configure the AntiSamy HTML sanitiser policy to strip inline `style` attributes and disallowed tags',
+            'Enable the RTE paste plugin with plaintext mode',
+            'Define allowed HTML elements',
+            'Add custom sanitizer',
+            'Train authors to paste plain text',
+          ],
+        },
+
+        {
+          id: 8,
+          zone: 'FE',
+          level: 'L3',
+          label: 'Multi-site template strategy',
+          q: 'Your client is launching 5 new country sites sharing a common design system but needing regional layout variations. How do you design the template and component strategy to avoid code duplication while giving regional teams flexibility?',
+          hint: 'Think about separation of global and regional.',
+          points: [
+            'Global component library',
+            'Editable templates',
+            'Style system',
+            'Context configs',
+            'Versioning',
+            'MSM',
+          ],
+        },
+
+        {
+          id: 9,
+          zone: 'FE',
+          level: 'L3',
+          label: 'Performance regression',
+          q: 'After launching site performance dropped drastically.',
+          hint: 'Frontend optimization',
+          points: [
+            'Audit clientlibs',
+            'Split bundle',
+            'Minify',
+            'Lazy load',
+            'Cache',
+          ],
+        },
+
+        {
+          id: 10,
+          zone: 'FE',
+          level: 'L3',
+          label: 'Headless decision',
+          q: 'React + AEM architecture decision.',
+          hint: 'Trade-offs',
+          points: [
+            'SPA Editor',
+            'Universal Editor',
+            'Headless',
+            'Business needs',
+          ],
+        },
+        {
+          id: 11,
+          zone: 'BE',
+          level: 'L1',
+          label: 'Sling Servlet not responding',
+          q: 'A developer registers a Sling Servlet by resource type but gets a 404 when hitting the expected URL. The bundle is active in the OSGi console. What do you check?',
+          hint: 'Sling servlet resolution depends on multiple matching criteria.',
+          points: [
+            "Verify the URL matches the servlet registration exactly — resource type, selector, extension, and HTTP method must all match what's registered",
+            'Check the Felix console at `/system/console/servlets` — search for the resource type to see if the servlet is registered; if not, the OSGi component may have an error preventing activation',
+            'Confirm the content node at the URL path has a `sling:resourceType` that matches the servlet registration',
+            'Check for competing servlets — another servlet with a more specific or broader match may be intercepting the request',
+            "Verify the request method — a GET-only servlet won't respond to POST requests",
+            'On AEMaaCS, check if the path is blocked by CDN/Dispatcher rules',
+          ],
+        },
+
+        {
+          id: 12,
+          zone: 'BE',
+          level: 'L1',
+          label: 'Workflow not triggering',
+          q: 'A DAM update workflow was working yesterday but stopped triggering today. No code changes were deployed. Where do you look?',
+          hint: 'Workflows can be paused, disabled, or have broken launchers.',
+          points: [
+            'Check the Workflow Launcher — go to Tools → Workflow → Launchers and verify the `DAM Update Asset` launcher is enabled and not paused',
+            'Check if the Workflow Engine is paused — confirm status is Running',
+            'Review the Workflow queue — backlog can block triggers',
+            'Check available disk space — low disk stops workflows',
+            'Review error logs for WorkflowException',
+          ],
+        },
+
+        {
+          id: 13,
+          zone: 'BE',
+          level: 'L1',
+          label: 'OSGi service not injecting',
+          q: 'A new OSGi service is null at runtime even though bundle is active.',
+          hint: 'Service registration issue',
+          points: [
+            'Check service is registered',
+            'Bundle might not be active',
+            'Missing dependency',
+            'Check @Reference usage',
+            'Check class is OSGi component',
+          ],
+        },
+
+        {
+          id: 14,
+          zone: 'BE',
+          level: 'L2',
+          label: 'ResourceResolver leak',
+          q: 'ResourceResolver not closed warning.',
+          hint: 'Lifecycle management',
+          points: [
+            'Use try-with-resources',
+            'Close resolver always',
+            'Check exception paths',
+            'Use service user',
+            'Add leak detector',
+          ],
+        },
+
+        {
+          id: 15,
+          zone: 'BE',
+          level: 'L2',
+          label: 'Slow JCR query',
+          q: 'Query works in dev but slow in prod.',
+          hint: 'Index issue',
+          points: [
+            'Use query debugger',
+            'Check traversal',
+            'Create Lucene index',
+            'Limit results',
+            'Add path restriction',
+          ],
+        },
+
+        {
+          id: 16,
+          zone: 'BE',
+          level: 'L2',
+          label: 'Workflow failing silently',
+          q: 'Workflow runs but no changes.',
+          hint: 'Commit missing',
+          points: [
+            'session.save() missing',
+            'Permission issue',
+            'Cache issue',
+            'Exception swallowed',
+            'Wrong payload path',
+          ],
+        },
+
+        {
+          id: 17,
+          zone: 'BE',
+          level: 'L2',
+          label: 'Replication failing',
+          q: 'Queue blocked.',
+          hint: 'Connectivity',
+          points: [
+            'Check agent config',
+            'Retry blocking item',
+            'Check publish health',
+            'Timeout issue',
+            'Large package blocking',
+          ],
+        },
+
+        {
+          id: 18,
+          zone: 'BE',
+          level: 'L3',
+          label: 'Production OOM crash',
+          q: 'OutOfMemoryError on publish.',
+          hint: 'Memory debugging',
+          points: [
+            'Enable heap dump',
+            'Analyze with MAT',
+            'Enable GC logs',
+            'Check job queue',
+            'Review static collections',
+          ],
+        },
+
+        {
+          id: 19,
+          zone: 'BE',
+          level: 'L3',
+          label: 'Index reindexing',
+          q: 'Reindex safely in production.',
+          hint: 'Avoid downtime',
+          points: [
+            'Use async index',
+            'Schedule off-hours',
+            'Monitor performance',
+            'Set reindex=true only specific index',
+            'Use oak-run',
+          ],
+        },
+
+        {
+          id: 20,
+          zone: 'BE',
+          level: 'L3',
+          label: 'Cluster duplicate jobs',
+          q: 'Duplicate jobs in cluster.',
+          hint: 'Distributed system',
+          points: [
+            'Use JobConsumer',
+            'Single enqueue',
+            'Distributed lock',
+            'Queue config',
+            'Primary node strategy',
+          ],
+        },
+        {
+          id: 21,
+          zone: 'FE+BE',
+          level: 'L1',
+          label: 'Page not appearing after publish',
+          q: "An author publishes a page and can see it on the publish instance directly (port 4503), but it's still showing the old version via the website URL (through Dispatcher). What steps do you take?",
+          hint: 'The page is published but the Dispatcher cache is stale.',
+          points: [
+            'The Dispatcher cache has not been invalidated — check the Dispatcher flush agent on author',
+            'Manually invalidate the Dispatcher cache for the page path',
+            'Check the flush agent queue — if blocked, resolve it',
+            'Verify statfileslevel setting',
+            'Check CDN caching in front of Dispatcher',
+          ],
+        },
+
+        {
+          id: 22,
+          zone: 'FE+BE',
+          level: 'L1',
+          label: 'Image not rendering on publish',
+          q: 'Image works on author but broken on publish.',
+          hint: 'Asset vs page publish',
+          points: [
+            'Asset not published',
+            'Dispatcher blocking DAM',
+            'Missing rendition',
+            'Model issue',
+            'Dynamic Media config',
+          ],
+        },
+
+        {
+          id: 23,
+          zone: 'FE+BE',
+          level: 'L1',
+          label: 'MSM rollout issue',
+          q: 'Blueprint change not reflecting.',
+          hint: 'Rollout trigger',
+          points: [
+            'Blueprint not activated',
+            'Wrong rollout config',
+            'Broken inheritance',
+            'Live Copy issue',
+            'Permission issue',
+          ],
+        },
+
+        {
+          id: 24,
+          zone: 'FE+BE',
+          level: 'L2',
+          label: 'Personalization issue',
+          q: 'Personalization not working for anonymous users.',
+          hint: 'Visitor identity',
+          points: [
+            'ECID not initialized',
+            'ContextHub issue',
+            'Dispatcher caching',
+            'Cookie consent blocking',
+            'Target config wrong',
+          ],
+        },
+
+        {
+          id: 25,
+          zone: 'FE+BE',
+          level: 'L2',
+          label: 'Translation issue',
+          q: 'Component content not translating.',
+          hint: 'Translation rules',
+          points: [
+            'Field not marked translatable',
+            'Missing translation rules',
+            'Nested content issue',
+            'Language config',
+            'CF model config',
+          ],
+        },
+
+        {
+          id: 26,
+          zone: 'FE+BE',
+          level: 'L2',
+          label: 'Commerce performance',
+          q: 'Product page slow.',
+          hint: 'API performance',
+          points: [
+            'Add caching',
+            'Use CDN/ESI',
+            'Use ISR',
+            'Reduce API data',
+            'Add fallback',
+          ],
+        },
+
+        {
+          id: 27,
+          zone: 'FE+BE',
+          level: 'L2',
+          label: 'Low cache hit',
+          q: 'Dispatcher hit rate low.',
+          hint: 'Cache rules',
+          points: [
+            'Check MISS logs',
+            'Remove unnecessary cookies',
+            'Ignore URL params',
+            'Check rules',
+            'Check auth headers',
+          ],
+        },
+
+        {
+          id: 28,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'Deployment issue',
+          q: 'Deployment breaks author.',
+          hint: 'OSGi issues',
+          points: [
+            'Check bundles',
+            'Check logs',
+            'Model failure',
+            'Version mismatch',
+            'Rollback',
+          ],
+        },
+
+        {
+          id: 29,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'MSM contamination',
+          q: 'Content from one site appears in another.',
+          hint: 'Rollout scope',
+          points: [
+            'Revert content',
+            'Check rollout config',
+            'Check path overlap',
+            'Regex issue',
+            'Add governance',
+          ],
+        },
+
+        {
+          id: 30,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'Migration issue',
+          q: 'AEMaaCS migration blocked.',
+          hint: 'Mutable vs immutable',
+          points: [
+            'Split packages',
+            'Vendor compatibility',
+            'Reorg content',
+            'Repo Init',
+            'Escalate',
+          ],
+        },
+        {
+          id: 31,
+          zone: 'FE+BE',
+          level: 'L1',
+          label: 'Author login very slow',
+          q: 'After a routine Service Pack update, authors report the AEM author login page takes 45 seconds to load. The instance was fast before the update. What do you investigate?',
+          hint: 'A slow startup often means OSGi bundles or indexes are still initialising.',
+          points: [
+            'Check if Oak async indexing is still running post-update — Service Packs often add new indexes that reindex asynchronously',
+            'Check the OSGi bundle console for bundles stuck in Starting or Resolved state',
+            'Review the error.log for LOGIN FAILED or RepositoryException',
+            'Check system resource usage — CPU and I/O',
+            'Restart AEM if needed',
+          ],
+        },
+
+        {
+          id: 32,
+          zone: 'FE+BE',
+          level: 'L1',
+          label: 'Content Fragment not in search',
+          q: 'Content Fragment not appearing in search.',
+          hint: 'Index issue',
+          points: [
+            'Check async indexing',
+            'Verify CF saved',
+            'Check index definition',
+            'Search exact title',
+            'Check permissions',
+          ],
+        },
+
+        {
+          id: 33,
+          zone: 'FE+BE',
+          level: 'L2',
+          label: 'Multi-site API config',
+          q: 'Different API per site.',
+          hint: 'Configuration',
+          points: [
+            'Use CAConfig',
+            'Use ConfigurationBuilder',
+            'Use global fallback',
+            'Use factory config',
+            'Allow author edit',
+          ],
+        },
+
+        {
+          id: 34,
+          zone: 'FE+BE',
+          level: 'L2',
+          label: 'Rewriter loop',
+          q: 'Infinite loop in rewriter.',
+          hint: 'Recursive processing',
+          points: [
+            'Exclude rewritten URL',
+            'Add guard condition',
+            'Fix path pattern',
+            'Disable transformer',
+            'Fix config',
+          ],
+        },
+
+        {
+          id: 35,
+          zone: 'FE+BE',
+          level: 'L2',
+          label: 'GDPR deletion',
+          q: 'Delete user data.',
+          hint: 'Multiple systems',
+          points: [
+            'Delete user',
+            'Search content',
+            'Clean workflows',
+            'Check logs',
+            'Audit',
+          ],
+        },
+
+        {
+          id: 36,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'High traffic scaling',
+          q: 'Handle 10x traffic.',
+          hint: 'Scaling',
+          points: [
+            'Increase publish nodes',
+            'Improve cache hit',
+            'Use CDN',
+            'Pre-generate pages',
+            'Fallback strategy',
+          ],
+        },
+
+        {
+          id: 37,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'Governance',
+          q: 'Content drift issue.',
+          hint: 'Control',
+          points: [
+            'Central library',
+            'Restrict components',
+            'Use style system',
+            'Add testing',
+            'Governance process',
+          ],
+        },
+
+        {
+          id: 38,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'DAM audit',
+          q: 'Find unused assets.',
+          hint: 'Reference mapping',
+          points: [
+            'Find references',
+            'Identify unused',
+            'Batch processing',
+            'Check last modified',
+            'Generate report',
+          ],
+        },
+
+        {
+          id: 39,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'Replatform decision',
+          q: 'AEM vs composable.',
+          hint: 'Strategy',
+          points: [
+            'Usage analysis',
+            'Cost comparison',
+            'Risk',
+            'Time to value',
+            'Author experience',
+          ],
+        },
+
+        {
+          id: 40,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'Security XSS',
+          q: 'XSS vulnerability.',
+          hint: 'Security',
+          points: [
+            'Sanitize output',
+            'Fix HTL context',
+            'Clean content',
+            'Deploy fix',
+            'Add CSP',
+          ],
+        },
+        {
+          id: 41,
+          zone: 'FE',
+          level: 'L2',
+          label: 'Editable template locking confusion',
+          q: "Authors on a campaign site complain that they can edit the navigation on some pages but not others, even though the pages look identical. Both page types use 'the same template'. What is happening?",
+          hint: 'Two templates can look identical but have different structure/initial content configurations.',
+          points: [
+            'The pages are actually using two different templates — one with navigation in Structure (locked) and one in Initial Content (editable)',
+            'Check Page Properties → Template for both pages',
+            'Structure vs Initial Content difference',
+            'Fix by aligning template structure',
+            'Avoid duplicate templates inconsistency',
+          ],
+        },
+
+        {
+          id: 42,
+          zone: 'FE',
+          level: 'L2',
+          label: 'Dialog editing wrong node',
+          q: 'Child component dialog edits parent node.',
+          hint: 'Resource context',
+          points: [
+            'Check cq:editConfig',
+            'Use data-sly-resource not include',
+            'Ensure separate JCR nodes',
+            'Check component tree',
+            'Fix container structure',
+          ],
+        },
+
+        {
+          id: 43,
+          zone: 'BE',
+          level: 'L2',
+          label: 'Service user permission',
+          q: 'AccessDeniedException in production.',
+          hint: 'Permissions',
+          points: [
+            'Create service user',
+            'Assign permissions',
+            'Use service mapping',
+            'Use subservice resolver',
+            'Avoid admin resolver',
+          ],
+        },
+
+        {
+          id: 44,
+          zone: 'BE',
+          level: 'L3',
+          label: 'Cache invalidation design',
+          q: 'Design CDN invalidation.',
+          hint: 'Event-driven',
+          points: [
+            'Listen replication event',
+            'Call CDN API',
+            'Handle related paths',
+            'Retry mechanism',
+            'Batch invalidation',
+          ],
+        },
+
+        {
+          id: 45,
+          zone: 'FE+BE',
+          level: 'L2',
+          label: 'GraphQL slow',
+          q: 'GraphQL query slow.',
+          hint: 'N+1 issue',
+          points: [
+            'Check query tracing',
+            'Use persisted queries',
+            'Reduce nesting',
+            'Add index',
+            'Pre-render',
+          ],
+        },
+
+        {
+          id: 46,
+          zone: 'FE+BE',
+          level: 'L1',
+          label: 'Author vs publish mismatch',
+          q: 'Component missing on publish.',
+          hint: 'Content state',
+          points: [
+            'Page not activated',
+            'Component not deployed',
+            'Dispatcher cache',
+            'Render condition',
+            'WCMMode check',
+          ],
+        },
+
+        {
+          id: 47,
+          zone: 'FE+BE',
+          level: 'L2',
+          label: 'Multi-language URLs',
+          q: 'SEO-friendly URLs.',
+          hint: 'URL mapping',
+          points: [
+            'Use vanity paths',
+            'Use Sling mapping',
+            'Handle unicode',
+            'Rewrite rules',
+            'hreflang setup',
+          ],
+        },
+
+        {
+          id: 48,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'Disaster recovery',
+          q: 'Primary fails.',
+          hint: 'Recovery plan',
+          points: [
+            'Promote standby',
+            'Recover delta',
+            'Verify system',
+            'Restore replication',
+            'Post-mortem',
+          ],
+        },
+
+        {
+          id: 49,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'Headless cache strategy',
+          q: 'Real-time CF update.',
+          hint: 'Event-driven',
+          points: [
+            'Use AEM events',
+            'Trigger revalidate API',
+            'Map CF to pages',
+            'CDN purge',
+            'Dashboard',
+          ],
+        },
+
+        {
+          id: 50,
+          zone: 'FE+BE',
+          level: 'L3',
+          label: 'Large migration',
+          q: '80k page migration.',
+          hint: 'Phased migration',
+          points: [
+            'Content analysis',
+            'Transformation pipeline',
+            'Parallel run',
+            'Validation',
+            'Gradual cutover',
+          ],
+        },
+      ];
+
+      let zone = 'all',
+        level = 'all';
+
+      function render() {
+        const list = DATA.filter(
+          (d) =>
+            (zone === 'all' || d.zone === zone) &&
+            (level === 'all' || d.level === level)
+        );
+
+        document.getElementById('stats').innerText = list.length + ' scenarios';
+
+        const container = document.getElementById('container');
+
+        container.innerHTML = `
+    <div class="grid">
+      ${list
+        .map(
+          (d) => `
+        <div class="card">
+          <div class="card-head">
+            <div class="meta">
+              <span class="badge">${d.zone}</span>
+              <span class="badge">${d.level}</span>
+            </div>
+            <p class="qtext">${d.q}</p>
+          </div>
+
+          <div class="answer-toggle" onclick="toggle(${d.id})">
+            Show Answer
+          </div>
+
+          <div class="answer" id="ans-${d.id}">
+            <div class="hint">${d.hint}</div>
+            <ul>${d.points.map((p) => `<li>${p}</li>`).join('')}</ul>
+          </div>
+        </div>
+      `
+        )
+        .join('')}
+    </div>
+  `;
+      }
+
+      function toggle(id) {
+        document.getElementById('ans-' + id).classList.toggle('open');
+      }
+
+      document.querySelectorAll('[data-z]').forEach((btn) => {
+        btn.onclick = () => {
+          zone = btn.dataset.z;
+          document
+            .querySelectorAll('[data-z]')
+            .forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          render();
+        };
+      });
+
+      document.querySelectorAll('[data-l]').forEach((btn) => {
+        btn.onclick = () => {
+          level = btn.dataset.l;
+          document
+            .querySelectorAll('[data-l]')
+            .forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          render();
+        };
+      });
+
+      render();
+    </script>
+  </body>
+</html>
